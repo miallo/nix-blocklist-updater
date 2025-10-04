@@ -1,6 +1,7 @@
 { pkgs, config, ... }:
 let
   cfg = config.services.blocklist-updater;
+  inherit (cfg) ipV4SetName ipV6SetName;
   mkRules = bin: f: set: ''
     ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
     ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
@@ -10,6 +11,14 @@ let
 
     ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
     ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
+  '';
+  postStop = ''
+    echo "Deleting all tables from firewall"
+    ${mkRules "iptables" "-D" ipV4SetName}
+    ipset destroy "${ipV4SetName}"
+
+    ${mkRules "ip6tables" "-D" ipV6SetName}
+    ipset destroy "${ipV6SetName}"
   '';
 in
 {
@@ -21,9 +30,8 @@ in
     script = toString (
       pkgs.writeScript "blocklist_update.sh" (import ./update_blocklist.nix { inherit pkgs config; })
     );
-    postStop = toString (
-      pkgs.writeScript "clear_blocklist.sh" (import ./clear_blocklist.nix { inherit pkgs config; })
-    );
+    inherit postStop;
+
     startAt = cfg.updateAt;
     path = [
       pkgs.ipset
