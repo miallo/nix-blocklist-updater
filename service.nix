@@ -15,6 +15,11 @@ in
       pkgs.writeScript "clear_blocklist.sh" (import ./clear_blocklist.nix { inherit pkgs config; })
     );
     startAt = cfg.updateAt;
+    path = [
+      pkgs.ipset
+      pkgs.iptables
+      pkgs.wget
+    ];
 
     wantedBy = [ "multi-user.target" ]; # start at boot
     after = [ "network.target" ]; # Ensure networking is up

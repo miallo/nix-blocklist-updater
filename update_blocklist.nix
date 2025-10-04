@@ -1,6 +1,5 @@
 { pkgs, config }:
 let
-  inherit (pkgs) ipset wget;
   inherit (config.services.blocklist-updater)
     blocklists
     ipV4SetName
@@ -27,7 +26,7 @@ in
   # Download the blocklist and add it to a file
   for url in "''${urls[@]}"; do
     echo "Downloading blocklist '$url'..."
-    ${wget}/bin/wget -q -O - "$url" >> "$BLFILE"
+    wget -q -O - "$url" >> "$BLFILE"
     echo >> "$BLFILE" # Add a newline separator
   done
 
@@ -55,5 +54,5 @@ in
           fi
       done < "$BLFILE"
   } > "$BLFILE_PROCESSED"
-  ${ipset}/bin/ipset restore < "$BLFILE_PROCESSED"
+  ipset restore < "$BLFILE_PROCESSED"
 ''
