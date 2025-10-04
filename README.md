@@ -25,4 +25,4 @@ blocklist-updater = {
 
 # Develop
 
-This repo is using automated code formatting. Please run `nix fmt *.nix` before committing :)
+This repo is using automated code formatting. Please run `nix fmt` before committing :)
