@@ -37,13 +37,13 @@
     };
     ipSetName = lib.mkOption {
       type = lib.types.str;
-      default = "BlackList";
-      description = "Name of ipset SETNAME";
+      default = "blocklist-as4";
+      description = "Name of ipset for IPv4 addresses";
     };
     ipV6SetName = lib.mkOption {
       type = lib.types.str;
-      default = "BlackList6";
-      description = "Name of ipset SETNAME for IPv6 addresses";
+      default = "blocklist-as6";
+      description = "Name of ipset for IPv6 addresses";
     };
   };
 
