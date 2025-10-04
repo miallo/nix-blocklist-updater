@@ -1,37 +1,6 @@
 { lib, ... }:
 with lib;
 {
-  imports = [
-    ./service.nix
-    (lib.mkRemovedOptionModule [ "services" "blocklist-updater" "runInitially" ] ''
-      The service is now performant and can be run on every boot. This avoids
-      leaving the blocklist in place if the module is removed.
-    '')
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "enable" ]
-      [ "services" "blocklist-updater" "enable" ]
-    )
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "blacklists" ]
-      [ "services" "blocklist-updater" "blocklists" ]
-    )
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "blacklistedIPs" ]
-      [ "services" "blocklist-updater" "blocklistedIPs" ]
-    )
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "updateAt" ]
-      [ "services" "blocklist-updater" "updateAt" ]
-    )
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "ipSetName" ]
-      [ "services" "blocklist-updater" "ipSetName" ]
-    )
-    (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "ipV6SetName" ]
-      [ "services" "blocklist-updater" "ipV6SetName" ]
-    )
-  ];
   options.services.blocklist-updater = {
     enable = mkEnableOption "blocklist-updater";
     blocklists = mkOption {
@@ -78,4 +47,36 @@ with lib;
       description = "Name of ipset SETNAME for IPv6 addresses";
     };
   };
+
+  imports = [
+    ./service.nix
+    (lib.mkRemovedOptionModule [ "services" "blocklist-updater" "runInitially" ] ''
+      The service is now performant and can be run on every boot. This avoids
+      leaving the blocklist in place if the module is removed.
+    '')
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "enable" ]
+      [ "services" "blocklist-updater" "enable" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "blacklists" ]
+      [ "services" "blocklist-updater" "blocklists" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "blacklistedIPs" ]
+      [ "services" "blocklist-updater" "blocklistedIPs" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "updateAt" ]
+      [ "services" "blocklist-updater" "updateAt" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "ipSetName" ]
+      [ "services" "blocklist-updater" "ipSetName" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "ipV6SetName" ]
+      [ "services" "blocklist-updater" "ipV6SetName" ]
+    )
+  ];
 }
