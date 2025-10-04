@@ -1,17 +1,16 @@
 { lib, ... }:
-with lib;
 {
   options.services.blocklist-updater = {
-    enable = mkEnableOption "blocklist-updater";
-    blocklists = mkOption {
-      type = types.listOf types.str;
+    enable = lib.mkEnableOption "blocklist-updater";
+    blocklists = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
       example = [ "example.com" ];
       default = [ "https://lists.blocklist.de/lists/all.txt" ];
       description = "URL lists containing new line separated IPs to be blocked";
       apply = lib.strings.concatMapStrings (x: "\n'${x}'");
     };
-    blocklistedIPs = mkOption {
-      type = with types; either str (listOf str);
+    blocklistedIPs = lib.mkOption {
+      type = with lib.types; either str (listOf str);
       example = [
         "1.2.3.4"
         "10.168.10.0/24"
@@ -19,10 +18,10 @@ with lib;
       ];
       default = [ ];
       description = "List of manually banned IPs";
-      apply = v: if isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
+      apply = v: if builtins.isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
     };
-    updateAt = mkOption {
-      type = with types; either str (listOf str);
+    updateAt = lib.mkOption {
+      type = with lib.types; either str (listOf str);
       default = "*-*-* 01:00:00";
       example = [
         "Wed 14:00:00"
@@ -36,13 +35,13 @@ with lib;
         {option}`OnCalendar` set to the value given here.
       '';
     };
-    ipSetName = mkOption {
-      type = types.str;
+    ipSetName = lib.mkOption {
+      type = lib.types.str;
       default = "BlackList";
       description = "Name of ipset SETNAME";
     };
-    ipV6SetName = mkOption {
-      type = types.str;
+    ipV6SetName = lib.mkOption {
+      type = lib.types.str;
       default = "BlackList6";
       description = "Name of ipset SETNAME for IPv6 addresses";
     };
