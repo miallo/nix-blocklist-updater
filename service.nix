@@ -12,6 +12,21 @@ let
     ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
     ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
   '';
+
+  script = ''
+    echo "Checking if ip-set ${ipV4SetName} already exists"
+    if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
+        echo "${ipV4SetName} doesn't exist. Creating."
+        ipset create "${ipV4SetName}" hash:net hashsize 262144 family inet
+        ${mkRules "iptables" "-I" ipV4SetName}
+    fi
+    if ! ipset -L ${ipV6SetName} >/dev/null 2>&1; then
+        echo "${ipV6SetName} doesn't exist. Creating."
+        ipset create "${ipV6SetName}" hash:net hashsize 262144 family inet6
+        ${mkRules "ip6tables" "-I" ipV6SetName}
+    fi
+  '';
+
   postStop = ''
     echo "Deleting all tables from firewall"
     ${mkRules "iptables" "-D" ipV4SetName}
@@ -24,10 +39,7 @@ in
 {
   systemd.services."blocklist" = {
     enable = cfg.enable;
-    preStart = toString (
-      pkgs.writeScript "init_blocklist.sh" (import ./init_blocklist.nix { inherit pkgs config mkRules; })
-    );
-    script = toString (
+    script = script + toString (
       pkgs.writeScript "blocklist_update.sh" (import ./update_blocklist.nix { inherit pkgs config; })
     );
     inherit postStop;
