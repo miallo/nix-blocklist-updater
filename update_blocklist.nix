@@ -3,7 +3,7 @@ let
   inherit (pkgs) ipset wget;
   inherit (config.services.blocklist-updater)
     blocklists
-    ipSetName
+    ipV4SetName
     ipV6SetName
     blocklistedIPs
     ;
@@ -36,7 +36,7 @@ in
 
   ${import ./clear_blocklist.nix { inherit pkgs config; }}
 
-  echo "Updating ip:s to ${ipSetName} ip-set"
+  echo "Updating ip:s to ${ipV4SetName} ip-set"
   # Create an ip set and add each ip to it one by one
 
   # IPv4 and IPv6 regex patterns with CIDR notation support - WARNING: might not be correct for all IPs (e.g. ignore valid ones or accept wrong ones), but seems to work fine
@@ -47,7 +47,7 @@ in
   {
       while IFS= read -r IP; do
           if [[ $IP =~ $ipv4_regex ]]; then
-              echo -exist add "${ipSetName}" "$IP"
+              echo -exist add "${ipV4SetName}" "$IP"
           elif [[ $IP =~ $ipv6_regex ]]; then
               echo -exist add "${ipV6SetName}" "$IP"
           else

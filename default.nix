@@ -35,7 +35,7 @@
         {option}`OnCalendar` set to the value given here.
       '';
     };
-    ipSetName = lib.mkOption {
+    ipV4SetName = lib.mkOption {
       type = lib.types.str;
       default = "blocklist-as4";
       description = "Name of ipset for IPv4 addresses";
@@ -70,8 +70,12 @@
       [ "services" "blocklist-updater" "updateAt" ]
     )
     (lib.mkRenamedOptionModule
-      [ "services" "blacklist-updater" "ipSetName" ]
       [ "services" "blocklist-updater" "ipSetName" ]
+      [ "services" "blocklist-updater" "ipV4SetName" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "services" "blacklist-updater" "ipSetName" ]
+      [ "services" "blocklist-updater" "ipV4SetName" ]
     )
     (lib.mkRenamedOptionModule
       [ "services" "blacklist-updater" "ipV6SetName" ]
