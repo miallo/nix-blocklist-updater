@@ -19,9 +19,36 @@ blocklist-updater = {
 };
 ```
 
-2. add `blocklist-updater.nixosModules.blocklist-updater` to your modules
-3. set `services.blocklist-updater.enable = true;`
-4. run `nixos-rebuild switch` and let NixOS do the rest :)
+2. add
+
+```nix
+imports = [
+  inputs.blocklist-updater.nixosModules.blocklist-updater
+];
+
+config.services.blocklist-updater = {
+  enable = true;
+
+  # optionally manually block certain IPs/domains
+  blocklistedIPs = [
+    "145.249.104.0/22"
+    "google.com"
+  ];
+
+  # optionally use your own blocklist
+  blocklists = [
+    "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts"
+  ];
+
+   # optionally set the time when to update
+   updateAt = [
+     "Wed 14:00:00"
+     "Sun 14:00:00"
+    ]
+};
+```
+
+3. run `nixos-rebuild switch` and let NixOS do the rest :)
 
 # Develop
 
