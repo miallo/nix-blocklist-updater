@@ -65,7 +65,7 @@ let
         done < "$BLFILE"
     } | ipset restore
 
-    rm -f $BLFILE
+    rm -f "$BLFILE"
   '';
 
   postStop = ''
