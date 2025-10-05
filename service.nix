@@ -55,13 +55,14 @@ let
 
     {
         while IFS= read -r IP; do
-            if [[ $IP =~ $ipv4_regex ]]; then
-                echo -exist add "${ipV4SetName}" "$IP"
-            elif [[ $IP =~ $ipv6_regex ]]; then
-                echo -exist add "${ipV6SetName}" "$IP"
-            elif [ -n "$IP" ]; then # only warn on non-empty line
-                echo "Warning: Invalid line skipped -> '$IP'" >&2
-            fi
+          if [[ "$IP" =~ $ipv4_regex ]]; then
+            echo -exist add "${ipV4SetName}" "$IP"
+          elif [[ "$IP" =~ $ipv6_regex ]]; then
+            echo -exist add "${ipV6SetName}" "$IP"
+          elif ! [[ "$IP" =~ ^$|^\# ]]; then
+            # ignore empty line / comments
+            echo "Warning: Invalid line skipped -> '$IP'" >&2
+          fi
         done < "$BLFILE"
     } | ipset restore
 
