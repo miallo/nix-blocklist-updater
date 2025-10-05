@@ -33,9 +33,8 @@ let
 
     # Output file
     BLFILE="/tmp/ipblocklist.txt"
-    BLFILE_PROCESSED="/tmp/ipblocklist_processed.txt"
 
-    rm -f "$BLFILE" "$BLFILE_PROCESSED" || :
+    rm -f "$BLFILE" || :
 
     # Download the blocklist and add it to a file
     for url in "''${urls[@]}"; do
@@ -54,7 +53,6 @@ let
     ipv4_regex="^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$"
     ipv6_regex="^([0-9a-fA-F:]+::?[0-9a-fA-F]*)+(\/[0-9]{1,3})?$"
 
-    # Use a temporary buffer to improve performance
     {
         while IFS= read -r IP; do
             if [[ $IP =~ $ipv4_regex ]]; then
@@ -65,10 +63,9 @@ let
                 echo "Warning: Invalid line skipped -> '$IP'" >&2
             fi
         done < "$BLFILE"
-    } > "$BLFILE_PROCESSED"
-    ipset restore < "$BLFILE_PROCESSED"
+    } | ipset restore
 
-    rm -f $BLFILE $BLFILE_PROCESSED
+    rm -f $BLFILE
   '';
 
   postStop = ''
