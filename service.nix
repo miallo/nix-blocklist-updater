@@ -83,6 +83,7 @@ in
 {
   systemd.services."blocklist" = {
     enable = cfg.enable;
+    description = "Set firewall according to blocklist";
     inherit script postStop;
 
     startAt = cfg.updateAt;
