@@ -85,8 +85,6 @@ in
     enable = cfg.enable;
     description = "Set firewall according to blocklist";
     inherit script postStop;
-
-    startAt = cfg.updateAt;
     path = [
       pkgs.ipset
       pkgs.iptables
@@ -96,6 +94,18 @@ in
     wantedBy = [ "multi-user.target" ]; # start at boot
     after = [ "network.target" ]; # Ensure networking is up
     serviceConfig.Type = "oneshot";
+    # needed to avoid triggering `onStop`, BUT
+    # This also prevents the timer from restarting (see: https://unix.stackexchange.com/a/546946)
+    # => create separate service that manually restarts this on a timer
     serviceConfig.RemainAfterExit = true;
+  };
+
+  systemd.services."blocklist-restart" = {
+    enable = cfg.enable;
+    description = "Trigger update of blocklist";
+    startAt = cfg.updateAt;
+    path = [ pkgs.systemd ];
+    script = "systemctl restart blocklist";
+    serviceConfig.Type = "oneshot";
   };
 }
