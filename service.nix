@@ -13,6 +13,7 @@ let
     ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
   '';
 
+  sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
   script = ''
     echo "Checking if ip-set ${ipV4SetName} already exists"
     if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
@@ -54,6 +55,10 @@ let
     ipv6_regex="^([0-9a-fA-F:]+::?[0-9a-fA-F]*)+(\/[0-9]{1,3})?$"
 
     {
+      sed -nE '/${sed_domain_regex}/!p' "$BLFILE"
+      # get all domains and query the IPs and ignore CNAMEs returned (e.g. from `dig +short mail.yahoo.com A`)
+      dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "$BLFILE") | grep -v '\.$'
+    } | {
         while IFS= read -r IP; do
           if [[ "$IP" =~ $ipv4_regex ]]; then
             echo -exist add "${ipV4SetName}" "$IP"
@@ -63,7 +68,7 @@ let
             # ignore empty line / comments
             echo "Warning: Invalid line skipped -> '$IP'" >&2
           fi
-        done < "$BLFILE"
+        done
     } | ipset restore
 
     rm -f "$BLFILE"
@@ -87,6 +92,7 @@ in
       pkgs.ipset
       pkgs.iptables
       pkgs.wget
+      pkgs.dig
     ];
 
     wantedBy = [ "multi-user.target" ]; # start at boot
