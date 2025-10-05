@@ -61,7 +61,7 @@ let
                 echo -exist add "${ipV4SetName}" "$IP"
             elif [[ $IP =~ $ipv6_regex ]]; then
                 echo -exist add "${ipV6SetName}" "$IP"
-            else
+            elif [ -n "$IP" ]; then # only warn on non-empty line
                 echo "Warning: Invalid line skipped -> '$IP'" >&2
             fi
         done < "$BLFILE"
