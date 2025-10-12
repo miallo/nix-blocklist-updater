@@ -2,7 +2,7 @@
 let
   cfg = config.services.blocklist-updater;
   inherit (cfg) ipV4SetName ipV6SetName;
-  mkRules = bin: f: set: ''
+  mkRules = bin: f: set: /* bash */ ''
     ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
     ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
 
@@ -14,7 +14,7 @@ let
   '';
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
-  script = ''
+  script = /* bash */ ''
     echo "Checking if ip-set ${ipV4SetName} already exists"
     if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
         echo "${ipV4SetName} doesn't exist. Creating."
@@ -74,7 +74,7 @@ let
     rm -f "$BLFILE"
   '';
 
-  postStop = ''
+  postStop = /* bash */ ''
     echo "Deleting all tables from firewall"
     ${mkRules "iptables" "-D" ipV4SetName}
     ipset destroy "${ipV4SetName}"
