@@ -20,6 +20,15 @@
       description = "List of manually banned IPs";
       apply = v: if builtins.isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
     };
+    generateIPScript = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      example = ''
+        ''${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v4.json | ''${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'
+        ''${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v6.json | ''${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'
+      '';
+      default = null;
+      description = "bash script to generate IPs/CIDR notatings/domains. The output (STDOUT) is taken and expects newline separated entries.";
+    };
     updateAt = lib.mkOption {
       type = with lib.types; either str (listOf str);
       default = "*-*-* 01:00:00";

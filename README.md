@@ -40,6 +40,12 @@ config.services.blocklist-updater = {
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts"
   ];
 
+   # optionally add a script to generate lists of IPs/domains (e.g. allows you to transform lists in incompatible formats)
+   generateIPScript = ''
+     ${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v4.json | ${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'
+     ${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v6.json | ${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'
+   '';
+
    # optionally set the time when to update
    updateAt = [
      "Wed 14:00:00"

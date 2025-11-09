@@ -1,4 +1,9 @@
-{ pkgs, config, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
   cfg = config.services.blocklist-updater;
   inherit (cfg) ipV4SetName ipV6SetName;
@@ -47,6 +52,13 @@ let
     # blocklist manual ips
     echo "${cfg.blocklistedIPs}">> $BLFILE
 
+    ${lib.optionalString (cfg.generateIPScript != null) /* bash */ ''
+      (
+        # begin custom code
+        ${cfg.generateIPScript}
+        # end custom code
+      ) >> "$BLFILE"
+    ''}
 
     ipset flush "${ipV4SetName}"
     ipset flush "${ipV6SetName}"
