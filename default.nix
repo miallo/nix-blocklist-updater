@@ -20,6 +20,18 @@
       description = "List of manually banned IPs";
       apply = v: if builtins.isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
     };
+
+    blocklistedASNs = lib.mkOption {
+      type = with lib.types; listOf (either ints.u32 str);
+      example = lib.literalExpression ''
+        [
+           14061 # DigitalOcean LLC
+           "AS396982" # GOOGLE-CLOUD-PLATFORM
+        ]'';
+      default = [ ];
+      description = "List of manually banned ASNs (autonomous systems). Uses https://stat.ripe.net . For terms and conditions, see https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/";
+    };
+
     generateIPScript = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       example = ''

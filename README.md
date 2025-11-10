@@ -46,6 +46,12 @@ config.services.blocklist-updater = {
     ${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v6.json | ${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'
   '';
 
+  # optionally block whole ASNs
+  blocklistedASNs = [
+    14061 # DigitalOcean LLC
+    "AS396982" # GOOGLE-CLOUD-PLATFORM
+  ];
+
   # optionally set the time when to update
   updateAt = [
     "Wed 14:00:00"

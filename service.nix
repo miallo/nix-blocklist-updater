@@ -60,6 +60,13 @@ let
       ) >> "$BLFILE"
     ''}
 
+    # ASNs
+    ${builtins.concatStringsSep "\n" (
+      map (asn: ''
+        wget -O - 'https://stat.ripe.net/data/announced-prefixes/data.json?resource=${builtins.toString asn}&preferred_version=1' | ${lib.getExe pkgs.jq} -r '.data.prefixes[].prefix' >> "$BLFILE"
+      '') cfg.blocklistedASNs
+    )}
+
     ipset flush "${ipV4SetName}"
     ipset flush "${ipV6SetName}"
 
