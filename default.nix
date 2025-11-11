@@ -32,6 +32,12 @@
       description = "List of manually banned ASNs (autonomous systems). Uses https://stat.ripe.net . For terms and conditions, see https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/";
     };
 
+    compressIPRanges = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "If too many ip blocks are found you can compress the data. While updating this is more memory intensive and adds python as a dependency.";
+    };
+
     generateIPScript = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       example = ''

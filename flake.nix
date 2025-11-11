@@ -39,6 +39,9 @@
       # for `nix flake check`
       checks = eachSystem (pkgs: {
         formatting = treefmtEval.${pkgs.system}.config.build.check self;
+
+        # TODO: add automated check of compressIPs script. for now: manually run it with:
+        # git diff --no-index -- <(cat test/ips.txt | python3 ./compressIPs.py) test/expected_ips.txt
       });
     };
 }
