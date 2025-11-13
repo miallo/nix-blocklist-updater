@@ -39,6 +39,11 @@ let
 
     # Output file
     BLFILE="/tmp/ipblocklist.txt"
+    ${lib.optionalString cfg.debug ''
+      BLDEBUG_DIR="/tmp/blocklist_debug"
+      rm -rf "$BLDEBUG_DIR"
+      mkdir "$BLDEBUG_DIR"
+    ''}
 
     rm -f "$BLFILE" || :
 
@@ -63,7 +68,7 @@ let
     # ASNs
     ${builtins.concatStringsSep "\n" (
       map (asn: ''
-        wget -O - 'https://stat.ripe.net/data/announced-prefixes/data.json?resource=${builtins.toString asn}&preferred_version=1' | ${lib.getExe pkgs.jq} -r '.data.prefixes[].prefix' >> "$BLFILE"
+        wget -O - 'https://stat.ripe.net/data/announced-prefixes/data.json?resource=${builtins.toString asn}&preferred_version=1' | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee "$BLDEBUG_DIR/${builtins.toString asn}.json" |''} ${lib.getExe pkgs.jq} -r '.data.prefixes[].prefix' >> "$BLFILE"
       '') cfg.blocklistedASNs
     )}
 
@@ -90,7 +95,7 @@ let
         done
     } | ipset restore
 
-    rm -f "$BLFILE"
+    ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
   '';
 
   postStop = /* bash */ ''

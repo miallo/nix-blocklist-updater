@@ -39,6 +39,12 @@
       description = "If too many ip blocks are found you can compress the data. While updating this is more memory intensive and adds python as a dependency.";
     };
 
+    debug = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Leave intermediate files in /tmp for later review";
+    };
+
     generateIPScript = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       example = ''
