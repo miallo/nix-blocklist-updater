@@ -7,16 +7,19 @@
 let
   cfg = config.services.blocklist-updater;
   inherit (cfg) ipV4SetName ipV6SetName;
-  mkRules = bin: f: set: /* bash */ ''
-    ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
-    ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
+  mkRules =
+    bin: f: set: allowOutbound:
+    /* bash */ ''
+      ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
+      ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
+    ''
+    + lib.optionalString (!allowOutbound) /* bash */ ''
+      ${bin} ${f} FORWARD -m set --match-set ${set} src -j DROP
+      ${bin} ${f} FORWARD -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
 
-    ${bin} ${f} FORWARD -m set --match-set ${set} src -j DROP
-    ${bin} ${f} FORWARD -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
-
-    ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
-    ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
-  '';
+      ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
+      ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
+    '';
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
 
@@ -49,12 +52,12 @@ let
     if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
         echo "${ipV4SetName} doesn't exist. Creating."
         ipset create "${ipV4SetName}" hash:net hashsize 262144 family inet
-        ${mkRules "iptables" "-I" ipV4SetName}
+        ${mkRules "iptables" "-I" ipV4SetName false}
     fi
     if ! ipset -L ${ipV6SetName} >/dev/null 2>&1; then
         echo "${ipV6SetName} doesn't exist. Creating."
         ipset create "${ipV6SetName}" hash:net hashsize 262144 family inet6
-        ${mkRules "ip6tables" "-I" ipV6SetName}
+        ${mkRules "ip6tables" "-I" ipV6SetName false}
     fi
 
     set -e
@@ -117,10 +120,10 @@ let
 
   postStop = /* bash */ ''
     echo "Deleting all tables from firewall"
-    ${mkRules "iptables" "-D" ipV4SetName}
+    ${mkRules "iptables" "-D" ipV4SetName false}
     ipset destroy "${ipV4SetName}"
 
-    ${mkRules "ip6tables" "-D" ipV6SetName}
+    ${mkRules "ip6tables" "-D" ipV6SetName false}
     ipset destroy "${ipV6SetName}"
   '';
 in
