@@ -19,6 +19,31 @@ let
   '';
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
+
+  applyFile =
+    file: blockOutbound:
+    let
+      suffix = lib.optionalString blockOutbound "out";
+    in
+    /* bash */ ''
+      {
+        sed -nE '/${sed_domain_regex}/!p' "${file}"
+        # get all domains and query the IPs and ignore CNAMEs returned (e.g. from `dig +short mail.yahoo.com A`)
+        dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "${file}") | grep -v '\.$'
+      } | ${lib.optionalString cfg.compressIPRanges "${lib.getExe pkgs.python3Minimal} ${./compressIPs.py} |"} {
+          while IFS= read -r IP; do
+            if [[ "$IP" =~ $ipv4_regex ]]; then
+              echo -exist add "${ipV4SetName + suffix}" "$IP"
+            elif [[ "$IP" =~ $ipv6_regex ]]; then
+              echo -exist add "${ipV6SetName + suffix}" "$IP"
+            elif ! [[ "$IP" =~ ^$|^\# ]]; then
+              # ignore empty line / comments
+              echo "Warning: Invalid line skipped -> '$IP'" >&2
+            fi
+          done
+      } | ipset restore
+    '';
+
   script = /* bash */ ''
     echo "Checking if ip-set ${ipV4SetName} already exists"
     if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
@@ -85,22 +110,7 @@ let
     ipv4_regex="^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$"
     ipv6_regex="^([0-9a-fA-F:]+::?[0-9a-fA-F]*)+(\/[0-9]{1,3})?$"
 
-    {
-      sed -nE '/${sed_domain_regex}/!p' "$BLFILE"
-      # get all domains and query the IPs and ignore CNAMEs returned (e.g. from `dig +short mail.yahoo.com A`)
-      dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "$BLFILE") | grep -v '\.$'
-    } | ${lib.optionalString cfg.compressIPRanges "${lib.getExe pkgs.python3Minimal} ${./compressIPs.py} |"} {
-        while IFS= read -r IP; do
-          if [[ "$IP" =~ $ipv4_regex ]]; then
-            echo -exist add "${ipV4SetName}" "$IP"
-          elif [[ "$IP" =~ $ipv6_regex ]]; then
-            echo -exist add "${ipV6SetName}" "$IP"
-          elif ! [[ "$IP" =~ ^$|^\# ]]; then
-            # ignore empty line / comments
-            echo "Warning: Invalid line skipped -> '$IP'" >&2
-          fi
-        done
-    } | ipset restore
+    ${applyFile "$BLFILE" true}
 
     ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
   '';
