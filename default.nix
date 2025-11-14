@@ -30,6 +30,7 @@
         ]'';
       default = [ ];
       description = "List of manually banned ASNs (autonomous systems). Uses https://stat.ripe.net . For terms and conditions, see https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/";
+      apply = lib.unique;
     };
 
     compressIPRanges = lib.mkOption {
