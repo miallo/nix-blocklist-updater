@@ -7,9 +7,13 @@
 let
   cfg = config.services.blocklist-updater;
   inherit (cfg) ipV4SetName ipV6SetName;
+  allowSomeOutboundTraffic = cfg.generateOutboundAllowedScript != null;
   mkRules =
     bin: f: set: allowOutbound:
-    /* bash */ ''
+    lib.optionalString allowOutbound /* bash */ ''
+      ${bin} ${if f == "-I" then "-A" else f} INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    ''
+    + /* bash */ ''
       ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
       ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
     ''
@@ -59,6 +63,19 @@ let
         ipset create "${ipV6SetName}" hash:net hashsize 262144 family inet6
         ${mkRules "ip6tables" "-I" ipV6SetName false}
     fi
+
+    ${lib.optionalString allowSomeOutboundTraffic /* bash */ ''
+      if ! ipset -L ${ipV4SetName}out >/dev/null 2>&1; then
+          echo "${ipV4SetName}out doesn't exist. Creating."
+          ipset create "${ipV4SetName}out" hash:net hashsize 262144 family inet
+          ${mkRules "iptables" "-I" "${ipV4SetName}out" allowSomeOutboundTraffic}
+      fi
+      if ! ipset -L ${ipV6SetName}out >/dev/null 2>&1; then
+          echo "${ipV6SetName}out doesn't exist. Creating."
+          ipset create "${ipV6SetName}out" hash:net hashsize 262144 family inet6
+          ${mkRules "ip6tables" "-I" "${ipV6SetName}out" allowSomeOutboundTraffic}
+      fi
+    ''}
 
     set -e
     urls=(
@@ -116,6 +133,19 @@ let
     ${applyFile "$BLFILE" true}
 
     ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
+
+    ${lib.optionalString allowSomeOutboundTraffic /* bash */ ''
+      ipset flush "${ipV4SetName}out"
+      ipset flush "${ipV6SetName}out"
+      BLFILE_OUT="/tmp/ipblocklist.txt"
+      (
+        # begin custom code
+        ${cfg.generateOutboundAllowedScript}
+        # end custom code
+      ) >> "$BLFILE_OUT"
+      ${applyFile "$BLFILE_OUT" false}
+      ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE_OUT"''}
+    ''}
   '';
 
   postStop = /* bash */ ''
@@ -125,6 +155,13 @@ let
 
     ${mkRules "ip6tables" "-D" ipV6SetName false}
     ipset destroy "${ipV6SetName}"
+
+    ${lib.optionalString allowSomeOutboundTraffic /* bash */ ''
+      ${mkRules "iptables" "-D" "${ipV4SetName}out" allowSomeOutboundTraffic}
+      ipset destroy "${ipV4SetName}out"
+      ${mkRules "ip6tables" "-D" "${ipV6SetName}out" allowSomeOutboundTraffic}
+      ipset destroy "${ipV6SetName}out"
+    ''}
   '';
 in
 {

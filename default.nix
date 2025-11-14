@@ -65,6 +65,20 @@
       default = null;
       description = "bash script to generate IPs/CIDR notatings/domains. The output (STDOUT) is taken and expects newline separated entries.";
     };
+
+    generateOutboundAllowedScript = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      example = ''
+        # No reason for Cloudflare to connect to us, but we might need to
+        # access data from their CDN
+        ''${lib.getExe pkgs.curl} -L 'https://www.cloudflare.com/ips-v4/#'
+        echo # needed because curl doesn't add one to the end
+        ''${lib.getExe pkgs.curl} -L 'https://www.cloudflare.com/ips-v6/#'
+      '';
+      default = null;
+      description = "bash script to generate IPs/CIDR notatings/domains which should allow outbound connections. The output (STDOUT) is taken and expects newline separated entries.";
+    };
+
     updateAt = lib.mkOption {
       type = with lib.types; either str (listOf str);
       default = "*-*-* 01:00:00";
