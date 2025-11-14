@@ -21,6 +21,7 @@ let
       ${bin} ${f} FORWARD -m set --match-set ${set} src -j DROP
       ${bin} ${f} FORWARD -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
 
+      # TODO: check if this should be OUTPUT instead of PREROUTING
       ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
       ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
     '';
