@@ -40,9 +40,9 @@ let
     # Output file
     BLFILE="/tmp/ipblocklist.txt"
     ${lib.optionalString cfg.debug ''
-    BLDEBUG_DIR="/tmp/blocklist_debug"
-    rm -rf "$BLDEBUG_DIR"
-    mkdir "$BLDEBUG_DIR"
+      BLDEBUG_DIR="/tmp/blocklist_debug"
+      rm -rf "$BLDEBUG_DIR"
+      mkdir "$BLDEBUG_DIR"
     ''}
 
     rm -f "$BLFILE" || :
