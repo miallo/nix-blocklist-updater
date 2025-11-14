@@ -77,7 +77,7 @@ let
       sed -nE '/${sed_domain_regex}/!p' "$BLFILE"
       # get all domains and query the IPs and ignore CNAMEs returned (e.g. from `dig +short mail.yahoo.com A`)
       dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "$BLFILE") | grep -v '\.$'
-    } | {
+    } | ${lib.optionalString cfg.compressIPRanges "${lib.getExe pkgs.python3Minimal} ${./compressIPs.py} |"} {
         while IFS= read -r IP; do
           if [[ "$IP" =~ $ipv4_regex ]]; then
             echo -exist add "${ipV4SetName}" "$IP"
