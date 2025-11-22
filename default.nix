@@ -80,6 +80,21 @@
         {option}`OnCalendar` set to the value given here.
       '';
     };
+    timerConfig = lib.mkOption {
+      default = {
+        FixedRandomDelay = "15min";
+      };
+      example = {
+        FixedRandomDelay = "0";
+      };
+      type = lib.types.attrsOf lib.types.str;
+      description = ''
+        Each attribute in this set specifies an option in the
+        `[Timer]` section of the unit.  See
+        {manpage}`systemd.timer(5)` and
+        {manpage}`systemd.time(7)` for details.
+      '';
+    };
     ipV4SetName = lib.mkOption {
       type = lib.types.str;
       default = "blocklist-as4";
