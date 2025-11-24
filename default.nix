@@ -21,6 +21,17 @@
       apply = v: if builtins.isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
     };
 
+    blocklistedCountries = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      example = [
+        "ru"
+        "cn"
+      ];
+      default = [ ];
+      description = "List of manually banned countries as 2-digit ISO-3166 country code (e.g. 'ru' or 'cn'). Uses https://stat.ripe.net . For terms and conditions, see https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/";
+      apply = lib.unique;
+    };
+
     blocklistedASNs = lib.mkOption {
       type = with lib.types; listOf (either ints.u32 str);
       example = lib.literalExpression ''

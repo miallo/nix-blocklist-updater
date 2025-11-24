@@ -65,6 +65,13 @@ let
       ) >> "$BLFILE"
     ''}
 
+    # Countries
+    ${builtins.concatStringsSep "\n" (
+      map (country: ''
+        wget -O - 'https://stat.ripe.net/data/country-resource-list/data.json?resource=${country}&v4_format=prefix' | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee "$BLDEBUG_DIR/${country}.json" |''} ${lib.getExe pkgs.jq} -r '.data.resources | .ipv4 + .ipv6 | .[]' >> "$BLFILE"
+      '') cfg.blocklistedCountries
+    )}
+
     # ASNs
     ${builtins.concatStringsSep "\n" (
       map (asn: ''
