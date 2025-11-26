@@ -143,6 +143,4 @@ in
     script = "systemctl restart blocklist";
     serviceConfig.Type = "oneshot";
   };
-
-  systemd.timers = lib.mkIf cfg.enable { "blocklist-restart" = { inherit (cfg) timerConfig; }; };
 }
