@@ -139,7 +139,14 @@ in
     startAt = cfg.updateAt;
     path = [ pkgs.systemd ];
     script = "systemctl restart blocklist";
-    serviceConfig.Type = "oneshot";
+    unitConfig = {
+      StartLimitIntervalSec = "infinity"; # only allow x restarts, however long it takes
+      StartLimitBurst = 2;
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      RestartSec = "300";
+    };
   };
 
   systemd.timers = lib.mkIf cfg.enable { "blocklist-restart" = { inherit (cfg) timerConfig; }; };
