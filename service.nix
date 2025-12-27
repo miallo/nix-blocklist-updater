@@ -38,14 +38,12 @@ let
     )
 
     # Output file
-    BLFILE="/tmp/ipblocklist.txt"
+    BLFILE=$(mktemp -t "ipblocklist.XXXXXX.txt")
     ${lib.optionalString cfg.debug ''
       BLDEBUG_DIR="/tmp/blocklist_debug"
       rm -rf "$BLDEBUG_DIR"
       mkdir "$BLDEBUG_DIR"
     ''}
-
-    rm -f "$BLFILE" || :
 
     # Download the blocklist and add it to a file
     for url in "''${urls[@]}"; do
