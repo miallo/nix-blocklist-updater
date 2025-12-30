@@ -38,14 +38,12 @@ let
     )
 
     # Output file
-    BLFILE="/tmp/ipblocklist.txt"
+    BLFILE=$(mktemp -t "ipblocklist.XXXXXX.txt")
     ${lib.optionalString cfg.debug ''
       BLDEBUG_DIR="/tmp/blocklist_debug"
       rm -rf "$BLDEBUG_DIR"
       mkdir "$BLDEBUG_DIR"
     ''}
-
-    rm -f "$BLFILE" || :
 
     # Download the blocklist and add it to a file
     for url in "''${urls[@]}"; do
@@ -141,7 +139,14 @@ in
     startAt = cfg.updateAt;
     path = [ pkgs.systemd ];
     script = "systemctl restart blocklist";
-    serviceConfig.Type = "oneshot";
+    unitConfig = {
+      StartLimitIntervalSec = "infinity"; # only allow x restarts, however long it takes
+      StartLimitBurst = 2;
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      RestartSec = "300";
+    };
   };
 
   systemd.timers = lib.mkIf cfg.enable { "blocklist-restart" = { inherit (cfg) timerConfig; }; };
