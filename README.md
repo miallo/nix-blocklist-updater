@@ -40,6 +40,12 @@ config.services.blocklist-updater = {
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts"
   ];
 
+  # optionally tune ipset capacity; the default maxElem is large enough for
+  # country-wide blocking (ipset's own default of 65536 is not). Memory is
+  # allocated per entry, not for the limit. hashSize is grown automatically.
+  maxElem = 1048576;
+  # hashSize = 65536;
+
   # optionally add a script to generate lists of IPs/domains (e.g. allows you to transform lists in incompatible formats)
   generateIPScript = ''
     ${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v4.json | ${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'

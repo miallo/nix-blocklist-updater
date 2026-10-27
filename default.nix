@@ -103,6 +103,17 @@
       default = "blocklist-as6";
       description = "Name of ipset for IPv6 addresses";
     };
+    maxElem = lib.mkOption {
+      type = lib.types.ints.u32;
+      default = 1048576;
+      description = "Maximum number of entries each ipset can hold. The upstream ipset default (65536) is too small for country-wide blocking or several feeds combined; memory is allocated per added entry, not for this limit.";
+    };
+    hashSize = lib.mkOption {
+      type = with lib.types; nullOr ints.unsigned;
+      default = null;
+      example = 65536;
+      description = "Initial hash size of each ipset; null uses ipset's default (1024). The kernel grows the hash automatically while entries are added, so explicit tuning is rarely needed.";
+    };
   };
 
   imports = [

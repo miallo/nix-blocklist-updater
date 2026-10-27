@@ -8,6 +8,11 @@ let
   cfg = config.services.blocklist-updater;
   bldebugDir = "/tmp/blocklist_debug";
   inherit (cfg) ipV4SetName ipV6SetName;
+  createArgs =
+    family:
+    "hash:net ${
+      lib.optionalString (cfg.hashSize != null) "hashsize ${toString cfg.hashSize} "
+    }maxelem ${toString cfg.maxElem} family ${family}";
   mkRules = bin: f: set: /* bash */ ''
     ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
     ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
@@ -79,9 +84,9 @@ let
     # Build fresh sets next to the live ones; they are committed atomically below,
     # so a failed or partial update can never leave the live sets empty.
     ipset destroy "${ipV4SetName}_new" 2>/dev/null || true
-    ipset create "${ipV4SetName}_new" hash:net hashsize 262144 family inet
+    ipset create "${ipV4SetName}_new" ${createArgs "inet"}
     ipset destroy "${ipV6SetName}_new" 2>/dev/null || true
-    ipset create "${ipV6SetName}_new" hash:net hashsize 262144 family inet6
+    ipset create "${ipV6SetName}_new" ${createArgs "inet6"}
 
     ipv4_regex="^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$"
     ipv6_regex="^([0-9a-fA-F:]+::?[0-9a-fA-F]*)+(\/[0-9]{1,3})?$"
