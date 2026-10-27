@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "flake:nixpkgs/nixos-unstable";
+    systems.url = "github:nix-systems/default";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -26,6 +27,40 @@
         }
       );
       blocklistModule = import ./.;
+
+      # Evaluate the NixOS module so `nix flake check` notices module-level
+      # breakage (e.g. units that ignore services.blocklist-updater.enable).
+      evalNixosModule =
+        system: enabled:
+        (import "${nixpkgs}/nixos/lib/eval-config.nix" {
+          inherit system;
+          modules = [
+            {
+              networking.hostName = "module-eval-test";
+              services.blocklist-updater.enable = enabled;
+            }
+            blocklistModule
+            (
+              { config, ... }:
+              {
+                assertions = [
+                  {
+                    assertion = (config.systemd.units ? "blocklist.service") == enabled;
+                    message = "unit blocklist.service should ${
+                      if enabled then "" else "not "
+                    }exist when enable = ${builtins.toString enabled}";
+                  }
+                  {
+                    assertion = (config.systemd.units ? "blocklist-restart.timer") == enabled;
+                    message = "timer blocklist-restart.timer should ${
+                      if enabled then "" else "not "
+                    }exist when enable = ${builtins.toString enabled}";
+                  }
+                ];
+              }
+            )
+          ];
+        }).config;
     in
     {
       nixosModules = rec {
@@ -40,8 +75,23 @@
       checks = eachSystem (pkgs: {
         formatting = treefmtEval.${pkgs.stdenv.hostPlatform.system}.config.build.check self;
 
-        # TODO: add automated check of compressIPs script. for now: manually run it with:
-        # git diff --no-index -- <(cat test/ips.txt | python3 ./compressIPs.py) test/expected_ips.txt
+        # the manual recipe formerly noted here, automated
+        compressIPs =
+          pkgs.runCommand "compressIPs-fixture-check" { nativeBuildInputs = [ pkgs.python3Minimal ]; }
+            ''
+              python3 ${./compressIPs.py} < ${./test/ips.txt} > out
+              diff out ${./test/expected_ips.txt}
+              mv out $out
+            '';
+
+        moduleEval =
+          let
+            on = evalNixosModule pkgs.stdenv.hostPlatform.system true;
+            off = evalNixosModule pkgs.stdenv.hostPlatform.system false;
+          in
+          pkgs.runCommand "nixos-module-eval-check" { } ''
+            echo "on=${on.networking.hostName} off=${off.networking.hostName}" > $out
+          '';
       });
     };
 }
