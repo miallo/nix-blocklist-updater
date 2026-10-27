@@ -21,17 +21,9 @@ let
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
   script = /* bash */ ''
-    echo "Checking if ip-set ${ipV4SetName} already exists"
-    if ! ipset -L ${ipV4SetName} >/dev/null 2>&1; then
-        echo "${ipV4SetName} doesn't exist. Creating."
-        ipset create "${ipV4SetName}" hash:net hashsize 262144 family inet
-        ${mkRules "iptables" "-I" ipV4SetName}
-    fi
-    if ! ipset -L ${ipV6SetName} >/dev/null 2>&1; then
-        echo "${ipV6SetName} doesn't exist. Creating."
-        ipset create "${ipV6SetName}" hash:net hashsize 262144 family inet6
-        ${mkRules "ip6tables" "-I" ipV6SetName}
-    fi
+    echo "Checking which ip-sets already exist"
+    if ipset -L "${ipV4SetName}" >/dev/null 2>&1; then v4_existing=1; else v4_existing=0; fi
+    if ipset -L "${ipV6SetName}" >/dev/null 2>&1; then v6_existing=1; else v6_existing=0; fi
 
     set -eo pipefail
     urls=(
@@ -84,8 +76,12 @@ let
       exit 1
     fi
 
-    ipset flush "${ipV4SetName}"
-    ipset flush "${ipV6SetName}"
+    # Build fresh sets next to the live ones; they are committed atomically below,
+    # so a failed or partial update can never leave the live sets empty.
+    ipset destroy "${ipV4SetName}_new" 2>/dev/null || true
+    ipset create "${ipV4SetName}_new" hash:net hashsize 262144 family inet
+    ipset destroy "${ipV6SetName}_new" 2>/dev/null || true
+    ipset create "${ipV6SetName}_new" hash:net hashsize 262144 family inet6
 
     ipv4_regex="^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$"
     ipv6_regex="^([0-9a-fA-F:]+::?[0-9a-fA-F]*)+(\/[0-9]{1,3})?$"
@@ -98,15 +94,40 @@ let
     } | ${lib.optionalString cfg.compressIPRanges "${lib.getExe pkgs.python3Minimal} ${./compressIPs.py} |"} {
         while IFS= read -r IP; do
           if [[ "$IP" =~ $ipv4_regex ]]; then
-            echo -exist add "${ipV4SetName}" "$IP"
+            echo -exist add "${ipV4SetName}_new" "$IP"
           elif [[ "$IP" =~ $ipv6_regex ]]; then
-            echo -exist add "${ipV6SetName}" "$IP"
+            echo -exist add "${ipV6SetName}_new" "$IP"
           elif ! [[ "$IP" =~ ^$|^\# ]]; then
             # ignore empty line / comments
             echo "Warning: Invalid line skipped -> '$IP'" >&2
           fi
         done
     } | ipset restore
+
+    commit_staged() {
+      local active="$1" staged="$2"
+      if ipset -L "$active" >/dev/null 2>&1; then
+        # swap exchanges contents *and* create options (hashsize/maxelem)
+        # atomically; afterwards the staged name holds the previous set.
+        if ipset swap "$active" "$staged"; then
+          ipset destroy "$staged"
+        else
+          echo "ipset swap failed for $active; recreating it from the staged set" >&2
+          ipset destroy "$active" 2>/dev/null || true
+          ipset rename "$staged" "$active"
+        fi
+      else
+        ipset rename "$staged" "$active"
+      fi
+    }
+    commit_staged "${ipV4SetName}" "${ipV4SetName}_new"
+    if [ "$v4_existing" = 0 ]; then
+      ${mkRules "iptables" "-I" ipV4SetName}
+    fi
+    commit_staged "${ipV6SetName}" "${ipV6SetName}_new"
+    if [ "$v6_existing" = 0 ]; then
+      ${mkRules "ip6tables" "-I" ipV6SetName}
+    fi
 
     ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
   '';
@@ -115,9 +136,11 @@ let
     echo "Deleting all tables from firewall"
     ${mkRules "iptables" "-D" ipV4SetName}
     ipset destroy "${ipV4SetName}"
+    ipset destroy "${ipV4SetName}_new" 2>/dev/null || true
 
     ${mkRules "ip6tables" "-D" ipV6SetName}
     ipset destroy "${ipV6SetName}"
+    ipset destroy "${ipV6SetName}_new" 2>/dev/null || true
   '';
 in
 lib.mkIf cfg.enable {
