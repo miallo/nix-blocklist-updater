@@ -114,9 +114,8 @@ let
     ipset destroy "${ipV6SetName}"
   '';
 in
-{
+lib.mkIf cfg.enable {
   systemd.services."blocklist" = {
-    enable = cfg.enable;
     description = "Set firewall according to blocklist";
     inherit script postStop;
     path = [
@@ -136,7 +135,6 @@ in
   };
 
   systemd.services."blocklist-restart" = {
-    enable = cfg.enable;
     description = "Trigger update of blocklist";
     startAt = cfg.updateAt;
     path = [ pkgs.systemd ];
@@ -144,5 +142,5 @@ in
     serviceConfig.Type = "oneshot";
   };
 
-  systemd.timers = lib.mkIf cfg.enable { "blocklist-restart" = { inherit (cfg) timerConfig; }; };
+  systemd.timers."blocklist-restart" = { inherit (cfg) timerConfig; };
 }
