@@ -1,12 +1,12 @@
 # Blocklist Updater For NixOS
 
-This NixOS expression will block all malicous IPs and update them daily.
+This NixOS expression will block all malicious IPs and update them daily.
 
 The source for the malicious IPs is lists.blocklist.de
 
 # Systemd
 
-A systemd unit called "blocklist" will be created and will run every day at 01:00:00.
+A systemd service called "blocklist" will be created; it runs at boot and installs the firewall rules. A timer "blocklist-restart" triggers an update every day at 01:00:00 plus a randomized delay of up to 15 minutes (both configurable via `updateAt` and `timerConfig`).
 
 # Usage
 
