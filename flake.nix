@@ -71,6 +71,24 @@
 
       # for `nix fmt`
       formatter = eachSystem (pkgs: treefmtEval.${pkgs.stdenv.hostPlatform.system}.config.build.wrapper);
+
+      # `nix develop`: ipset/iptables/wget/dig/python3 etc. — the tools
+      # test/e2e/netns.sh runs its netns tests with, handy for manual debugging.
+      devShells = eachSystem (pkgs: {
+        default = pkgs.mkShell {
+          packages = with pkgs; [
+            ipset
+            iptables
+            wget
+            bind
+            python3
+            coreutils
+            gnused
+            gnugrep
+            git
+          ];
+        };
+      });
       # for `nix flake check`
       checks = eachSystem (pkgs: {
         formatting = treefmtEval.${pkgs.stdenv.hostPlatform.system}.config.build.check self;
