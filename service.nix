@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.services.blocklist-updater;
-  bldebugDir = "/tmp/blocklist_debug";
+  bldebugDir = "/var/lib/blocklist-updater/debug";
   inherit (cfg) ipV4SetName ipV6SetName;
   createArgs =
     family:
@@ -166,6 +166,11 @@ lib.mkIf cfg.enable {
     # This also prevents the timer from restarting (see: https://unix.stackexchange.com/a/546946)
     # => create separate service that manually restarts this on a timer
     serviceConfig.RemainAfterExit = true;
+    # /tmp/ipblocklist.txt is written as root: keep it in a private /tmp so
+    # local users cannot pre-seed or symlink it, and keep debug artifacts in
+    # a dedicated state directory instead.
+    serviceConfig.PrivateTmp = true;
+    serviceConfig.StateDirectory = "blocklist-updater";
   };
 
   systemd.services."blocklist-restart" = {

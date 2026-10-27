@@ -51,7 +51,7 @@
     debug = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Leave intermediate files in /tmp for later review";
+      description = "Leave intermediate files under /var/lib/blocklist-updater/debug for later review";
     };
 
     generateIPScript = lib.mkOption {
