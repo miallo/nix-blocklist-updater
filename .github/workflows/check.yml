@@ -14,3 +14,7 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
       - run: nix flake check
+      # Runs in the runner's own (unprivileged) user context: the nix build
+      # sandbox blocks unshare/netns, so this is a workflow step, never a flake check.
+      - name: e2e (ipset/iptables in a netns)
+        run: ./test/e2e/netns.sh
