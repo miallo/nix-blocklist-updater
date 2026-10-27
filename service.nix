@@ -33,7 +33,7 @@ let
         ${mkRules "ip6tables" "-I" ipV6SetName}
     fi
 
-    set -e
+    set -eo pipefail
     urls=(
       ${lib.escapeShellArgs cfg.blocklists}
     )
@@ -79,6 +79,11 @@ let
       '') cfg.blocklistedASNs
     )}
 
+    if ! grep -q . "$BLFILE"; then
+      echo "blocklist-updater: no entries collected from any source, refusing to replace live sets" >&2
+      exit 1
+    fi
+
     ipset flush "${ipV4SetName}"
     ipset flush "${ipV6SetName}"
 
@@ -88,7 +93,8 @@ let
     {
       sed -nE '/${sed_domain_regex}/!p' "$BLFILE"
       # get all domains and query the IPs and ignore CNAMEs returned (e.g. from `dig +short mail.yahoo.com A`)
-      dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "$BLFILE") | grep -v '\.$'
+      # a domain failing to resolve is normal (NXDOMAIN -> dig exit 2), so tolerate it; dedup queries with sort -u
+      dig -f <(sed -nE 's/${sed_domain_regex}/\2 A \2 AAAA +short/p' "$BLFILE" | sort -u) | grep -v '\.$' || true
     } | ${lib.optionalString cfg.compressIPRanges "${lib.getExe pkgs.python3Minimal} ${./compressIPs.py} |"} {
         while IFS= read -r IP; do
           if [[ "$IP" =~ $ipv4_regex ]]; then
