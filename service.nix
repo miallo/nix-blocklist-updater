@@ -6,6 +6,7 @@
 }:
 let
   cfg = config.services.blocklist-updater;
+  bldebugDir = "/tmp/blocklist_debug";
   inherit (cfg) ipV4SetName ipV6SetName;
   mkRules = bin: f: set: /* bash */ ''
     ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
@@ -34,15 +35,14 @@ let
 
     set -e
     urls=(
-      ${cfg.blocklists}
+      ${lib.escapeShellArgs cfg.blocklists}
     )
 
     # Output file
     BLFILE="/tmp/ipblocklist.txt"
     ${lib.optionalString cfg.debug ''
-      BLDEBUG_DIR="/tmp/blocklist_debug"
-      rm -rf "$BLDEBUG_DIR"
-      mkdir "$BLDEBUG_DIR"
+      rm -rf ${lib.escapeShellArg bldebugDir}
+      mkdir -p ${lib.escapeShellArg bldebugDir}
     ''}
 
     rm -f "$BLFILE" || :
@@ -55,7 +55,7 @@ let
     done
 
     # blocklist manual ips
-    echo "${cfg.blocklistedIPs}">> $BLFILE
+    printf '%s\n' ${lib.escapeShellArgs (lib.toList cfg.blocklistedIPs)} >> "$BLFILE"
 
     ${lib.optionalString (cfg.generateIPScript != null) /* bash */ ''
       (
@@ -68,14 +68,14 @@ let
     # Countries
     ${builtins.concatStringsSep "\n" (
       map (country: ''
-        wget -O - 'https://stat.ripe.net/data/country-resource-list/data.json?resource=${country}&v4_format=prefix' | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee "$BLDEBUG_DIR/${country}.json" |''} ${lib.getExe pkgs.jq} -r '.data.resources | .ipv4 + .ipv6 | .[]' >> "$BLFILE"
+        wget -O - ${lib.escapeShellArg "https://stat.ripe.net/data/country-resource-list/data.json?resource=${country}&v4_format=prefix"} | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee ${lib.escapeShellArg "${bldebugDir}/${country}.json"} |''} ${lib.getExe pkgs.jq} -r '.data.resources | .ipv4 + .ipv6 | .[]' >> "$BLFILE"
       '') cfg.blocklistedCountries
     )}
 
     # ASNs
     ${builtins.concatStringsSep "\n" (
       map (asn: ''
-        wget -O - 'https://stat.ripe.net/data/announced-prefixes/data.json?resource=${builtins.toString asn}&preferred_version=1' | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee "$BLDEBUG_DIR/${builtins.toString asn}.json" |''} ${lib.getExe pkgs.jq} -r '.data.prefixes[].prefix' >> "$BLFILE"
+        wget -O - ${lib.escapeShellArg "https://stat.ripe.net/data/announced-prefixes/data.json?resource=${builtins.toString asn}&preferred_version=1"} | ${lib.optionalString cfg.debug ''${pkgs.coreutils}/bin/tee ${lib.escapeShellArg "${bldebugDir}/${builtins.toString asn}.json"} |''} ${lib.getExe pkgs.jq} -r '.data.prefixes[].prefix' >> "$BLFILE"
       '') cfg.blocklistedASNs
     )}
 

@@ -7,7 +7,6 @@
       example = [ "example.com" ];
       default = [ "https://lists.blocklist.de/lists/all.txt" ];
       description = "URL lists containing new line separated IPs to be blocked";
-      apply = lib.strings.concatMapStrings (x: "\n'${x}'");
     };
     blocklistedIPs = lib.mkOption {
       type = with lib.types; either str (listOf str);
@@ -18,7 +17,6 @@
       ];
       default = [ ];
       description = "List of manually banned IPs";
-      apply = v: if builtins.isList v then lib.strings.concatMapStrings (x: "\n" + x) v else v;
     };
 
     blocklistedCountries = lib.mkOption {
