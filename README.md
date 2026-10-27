@@ -77,3 +77,9 @@ config.services.blocklist-updater = {
 # Develop
 
 This repo is using automated code formatting. Please run `nix fmt` before committing :)
+
+End-to-end tests (ipset/iptables in an unprivileged netns): `./test/e2e/netns.sh`.
+The tools it needs (`ipset`, `iptables`, `wget`, `dig`, …) come from the flake's
+devShell — `nix develop` gives you the same set for manual debugging.
+It must run in a user shell (or CI step) — the nix build sandbox blocks `unshare`,
+so it is deliberately not part of `nix flake check`.
