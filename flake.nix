@@ -81,6 +81,15 @@
             ''
               python3 ${./compressIPs.py} < ${./test/ips.txt} > out
               diff out ${./test/expected_ips.txt}
+              # regression: 4096 consecutive /24 must collapse to exactly one /12
+              # (the old fixed-10-pass merge hit its cap and emitted chains raw)
+              for k in $(seq 0 4095); do echo "172.$((16 + k / 256)).$((k % 256)).0/24"; done \
+                | python3 ${./compressIPs.py} > wide 2>/dev/null
+              [ "$(cat wide)" = "172.16.0.0/12" ] || { echo "FAIL 4096-chain: $(cat wide)"; exit 1; }
+              # regression: duplicate v4-mapped address must appear exactly once (in v6)
+              printf '::ffff:1.2.3.4\n::ffff:1.2.3.4\n' \
+                | python3 ${./compressIPs.py} > mapped 2>/dev/null
+              [ "$(cat mapped)" = "::ffff:1.2.3.4/128" ] || { echo "FAIL v4-mapped: $(cat mapped)"; exit 1; }
               mv out $out
             '';
 
