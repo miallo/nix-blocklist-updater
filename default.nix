@@ -121,7 +121,7 @@
       description = "Name of ipset for IPv6 addresses";
     };
     maxElem = lib.mkOption {
-      type = lib.types.ints.u32;
+      type = lib.types.ints.unsigned;
       default = 1048576;
       description = "Maximum number of entries each ipset can hold. The upstream ipset default (65536) is too small for country-wide blocking or several feeds combined; memory is allocated per added entry, not for this limit.";
     };
