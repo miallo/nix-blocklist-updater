@@ -14,52 +14,86 @@ let
       lib.optionalString (cfg.hashSize != null) "hashsize ${toString cfg.hashSize} "
     }maxelem ${toString cfg.maxElem} family ${family}";
   logLimit = "-m limit --limit 10/min --limit-burst 20";
-  # mkRulesFor conntrackMatch includeRaw: shell text installing (f = "-I") or
-  # removing (f = "-D") one rule pair per chain. The conntrack match is only
-  # valid in filter chains — the raw table runs before conntrack exists.
-  mkRulesFor =
-    ctNew: includeRaw: bin: f: set:
+  logTarget = "${logLimit} -j LOG --log-prefix \"FW_DROPPED: \"";
+  # Up to and including main, the LOG rule shipped WITHOUT rate limiting.
+  # `iptables -D/-C` match the full rule spec, so teardown carries the old
+  # spec explicitly as a "legacy" target: stopping this release must delete
+  # what the previous release installed, or the leftover rules pin the ipset
+  # and silently replace the working firewall on upgrade (e2e run 8).
+  legacyLogTarget = "-j LOG --log-prefix \"FW_DROPPED: \"";
+  # One rule spec = exactly one iptables rule. `match` carries the conntrack
+  # variant; the conntrack match is only valid in filter chains — the raw
+  # table runs before conntrack exists, and omitting the raw pair is what
+  # lets blockDirection = "inbound" keep outbound traffic alive.
+  mkRuleSpecs =
+    ctNew: includeRaw: legacyCompat: set:
     let
-      # Insert at explicit positions (LOG at 1, DROP at 2) so the LOG rule
-      # always evaluates before the DROP that follows it, independent of the
-      # order these commands run in; the old code silently relied on iptables -I
-      # prepending (see review #7). -D takes no position and matches the full
-      # rule spec, so teardown is unaffected. LOG is rate limited: without it
-      # any scan from a blocklisted source floods the kernel log.
-      pos = n: lib.optionalString (f == "-I") " ${toString n}";
       m = "${ctNew}-m set --match-set ${set} src";
+      pair = table: chain: [
+        {
+          inherit table chain;
+          match = m;
+          target = logTarget;
+          legacyTargets = lib.optionals legacyCompat [ legacyLogTarget ];
+          pos = 1;
+        }
+        {
+          inherit table chain;
+          match = m;
+          target = "-j DROP";
+          legacyTargets = [ ];
+          pos = 2;
+        }
+      ];
     in
-    /* bash */ ''
-      ${bin} ${f} INPUT${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
-      ${bin} ${f} INPUT${pos 2} ${m} -j DROP
-      ${bin} ${f} FORWARD${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
-      ${bin} ${f} FORWARD${pos 2} ${m} -j DROP
-      ${lib.optionalString includeRaw /* bash */ ''
-        # raw PREROUTING drops run before conntrack and therefore also kill
-        # replies to connections this host initiated towards blocklisted
-        # sources — which is exactly what blockDirection = "inbound" omits.
-        ${bin} -t raw ${f} PREROUTING${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
-        ${bin} -t raw ${f} PREROUTING${pos 2} ${m} -j DROP
-      ''}
-    '';
-  blockRules = {
+    pair "filter" "INPUT"
+    ++ pair "filter" "FORWARD"
+    ++ lib.optionals includeRaw (pair "raw" "PREROUTING");
+  ruleSpecs = {
     # Paranoid default: drop every packet whose source is blocklisted.
-    all = mkRulesFor "" true;
+    all = mkRuleSpecs "" true true;
     # Block new inbound connections only: packets of established connections
     # (incl. replies to our own outbound traffic) pass because they no longer
     # match conntrack state NEW, so outbound contact with blocklisted hosts
     # keeps working. Stray packets that match no connection (INVALID) pass;
     # they cannot establish anything without a responding handshake.
-    inbound = mkRulesFor "-m conntrack --ctstate NEW " false;
+    inbound = mkRuleSpecs "-m conntrack --ctstate NEW " false false;
   };
-  mkRules = blockRules.${cfg.blockDirection};
+  tblArg = t: lib.optionalString (t == "raw") "-t raw ";
+  # Install each spec unless already present. A live ipset is NOT proof the
+  # rules are (manual `iptables -F`, or teardown interrupted by an older
+  # release's spec mismatch), so installation is idempotent per rule instead
+  # of gated on set creation — a missing DROP rule is self-healed by the next
+  # timer run rather than silently absent.
+  installRules =
+    bin: rules:
+    lib.concatStringsSep "\n" (
+      map (r: ''
+        if ! ${bin} ${tblArg r.table}-C ${r.chain} ${r.match} ${r.target} 2>/dev/null; then
+          ${bin} ${tblArg r.table}-I ${r.chain} ${toString r.pos} ${r.match} ${r.target}
+        fi
+      '') rules
+    );
+  # -D matches the full rule spec: delete the current spec plus every legacy
+  # spec that was ever installed into this rule slot.
+  teardownRules =
+    bin: rules:
+    lib.concatStringsSep "\n" (
+      map (
+        r:
+        lib.concatStringsSep "\n" (
+          [
+            ''${bin} ${tblArg r.table}-D ${r.chain} ${r.match} ${r.target} 2>/dev/null || :''
+          ]
+          ++ map (
+            t: ''${bin} ${tblArg r.table}-D ${r.chain} ${r.match} ${t} 2>/dev/null || :''
+          ) r.legacyTargets
+        )
+      ) rules
+    );
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
   script = /* bash */ ''
-    echo "Checking which ip-sets already exist"
-    if ipset -L "${ipV4SetName}" >/dev/null 2>&1; then v4_existing=1; else v4_existing=0; fi
-    if ipset -L "${ipV6SetName}" >/dev/null 2>&1; then v6_existing=1; else v6_existing=0; fi
-
     set -eo pipefail
     urls=(
       ${lib.escapeShellArgs cfg.blocklists}
@@ -156,13 +190,9 @@ let
       fi
     }
     commit_staged "${ipV4SetName}" "${ipV4SetName}_new"
-    if [ "$v4_existing" = 0 ]; then
-      ${mkRules "iptables" "-I" ipV4SetName}
-    fi
+    ${installRules "iptables" (ruleSpecs.${cfg.blockDirection} ipV4SetName)}
     commit_staged "${ipV6SetName}" "${ipV6SetName}_new"
-    if [ "$v6_existing" = 0 ]; then
-      ${mkRules "ip6tables" "-I" ipV6SetName}
-    fi
+    ${installRules "ip6tables" (ruleSpecs.${cfg.blockDirection} ipV6SetName)}
 
     ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
   '';
@@ -173,12 +203,15 @@ let
     # was changed during a rebuild, the unit restarts and the rules installed in the
     # kernel come from the old setting — deleting only the current variant would orphan
     # them. Failing to delete a variant that was never installed must not fail teardown.
+    # The "all" variant additionally deletes the pre-rate-limit LOG spec so an
+    # upgrade from <= main unpins the ipsets instead of leaving orphan rules that
+    # survive teardown and silently replace the firewall (e2e run 8).
     (
       set +e
-      ${blockRules.all "iptables" "-D" ipV4SetName}
-      ${blockRules.all "ip6tables" "-D" ipV6SetName}
-      ${blockRules.inbound "iptables" "-D" ipV4SetName}
-      ${blockRules.inbound "ip6tables" "-D" ipV6SetName}
+      ${teardownRules "iptables" (ruleSpecs.all ipV4SetName)}
+      ${teardownRules "ip6tables" (ruleSpecs.all ipV6SetName)}
+      ${teardownRules "iptables" (ruleSpecs.inbound ipV4SetName)}
+      ${teardownRules "ip6tables" (ruleSpecs.inbound ipV6SetName)}
       true
     )
     ipset destroy "${ipV4SetName}"
