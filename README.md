@@ -46,6 +46,15 @@ config.services.blocklist-updater = {
   maxElem = 1048576;
   # hashSize = 65536;
 
+  # optionally block only *new inbound* connections from blocklisted sources
+  # (replies to your own outbound connections to them then pass and the raw
+  # PREROUTING stage is skipped); default "all" drops every packet from a
+  # blocklisted source, including replies to connections you initiated
+  # blockDirection = "inbound";
+
+  # drop rules are logged before they drop, rate limited to 10 lines/min per
+  # chain so a scan cannot flood the kernel log
+
   # optionally add a script to generate lists of IPs/domains (e.g. allows you to transform lists in incompatible formats)
   generateIPScript = ''
     ${lib.getExe pkgs.curl} -L https://www.spamhaus.org/drop/drop_v4.json | ${lib.getExe pkgs.jq} -r ' .cidr | select( . != null )'

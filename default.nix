@@ -48,6 +48,23 @@
       description = "If too many ip blocks are found you can compress the data. While updating this is more memory intensive and adds python as a dependency.";
     };
 
+    blockDirection = lib.mkOption {
+      type = lib.types.enum [
+        "all"
+        "inbound"
+      ];
+      default = "all";
+      example = "inbound";
+      description = ''
+        Which traffic the blocklists apply to. `all` drops every packet from a
+        blocklisted source, including replies to connections you initiated — do
+        not pick it when you still need to reach blocklisted hosts. `inbound`
+        blocks only new inbound connections: the rules additionally match
+        conntrack state NEW and the pre-conntrack raw PREROUTING rules are
+        omitted, so outbound connections to blocklisted hosts keep working.
+      '';
+    };
+
     debug = lib.mkOption {
       type = lib.types.bool;
       default = false;

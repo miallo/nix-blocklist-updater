@@ -14,8 +14,11 @@ let
       lib.optionalString (cfg.hashSize != null) "hashsize ${toString cfg.hashSize} "
     }maxelem ${toString cfg.maxElem} family ${family}";
   logLimit = "-m limit --limit 10/min --limit-burst 20";
-  mkRules =
-    bin: f: set:
+  # mkRulesFor conntrackMatch includeRaw: shell text installing (f = "-I") or
+  # removing (f = "-D") one rule pair per chain. The conntrack match is only
+  # valid in filter chains — the raw table runs before conntrack exists.
+  mkRulesFor =
+    ctNew: includeRaw: bin: f: set:
     let
       # Insert at explicit positions (LOG at 1, DROP at 2) so the LOG rule
       # always evaluates before the DROP that follows it, independent of the
@@ -24,16 +27,32 @@ let
       # rule spec, so teardown is unaffected. LOG is rate limited: without it
       # any scan from a blocklisted source floods the kernel log.
       pos = n: lib.optionalString (f == "-I") " ${toString n}";
-      m = "-m set --match-set ${set} src";
+      m = "${ctNew}-m set --match-set ${set} src";
     in
     /* bash */ ''
       ${bin} ${f} INPUT${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
       ${bin} ${f} INPUT${pos 2} ${m} -j DROP
       ${bin} ${f} FORWARD${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
       ${bin} ${f} FORWARD${pos 2} ${m} -j DROP
-      ${bin} -t raw ${f} PREROUTING${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
-      ${bin} -t raw ${f} PREROUTING${pos 2} ${m} -j DROP
+      ${lib.optionalString includeRaw /* bash */ ''
+        # raw PREROUTING drops run before conntrack and therefore also kill
+        # replies to connections this host initiated towards blocklisted
+        # sources — which is exactly what blockDirection = "inbound" omits.
+        ${bin} -t raw ${f} PREROUTING${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
+        ${bin} -t raw ${f} PREROUTING${pos 2} ${m} -j DROP
+      ''}
     '';
+  blockRules = {
+    # Paranoid default: drop every packet whose source is blocklisted.
+    all = mkRulesFor "" true;
+    # Block new inbound connections only: packets of established connections
+    # (incl. replies to our own outbound traffic) pass because they no longer
+    # match conntrack state NEW, so outbound contact with blocklisted hosts
+    # keeps working. Stray packets that match no connection (INVALID) pass;
+    # they cannot establish anything without a responding handshake.
+    inbound = mkRulesFor "-m conntrack --ctstate NEW " false;
+  };
+  mkRules = blockRules.${cfg.blockDirection};
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
   script = /* bash */ ''
@@ -150,11 +169,20 @@ let
 
   postStop = /* bash */ ''
     echo "Deleting all tables from firewall"
-    ${mkRules "iptables" "-D" ipV4SetName}
+    # Tear down *both* directions best-effort: if services.blocklist-updater.blockDirection
+    # was changed during a rebuild, the unit restarts and the rules installed in the
+    # kernel come from the old setting — deleting only the current variant would orphan
+    # them. Failing to delete a variant that was never installed must not fail teardown.
+    (
+      set +e
+      ${blockRules.all "iptables" "-D" ipV4SetName}
+      ${blockRules.all "ip6tables" "-D" ipV6SetName}
+      ${blockRules.inbound "iptables" "-D" ipV4SetName}
+      ${blockRules.inbound "ip6tables" "-D" ipV6SetName}
+      true
+    )
     ipset destroy "${ipV4SetName}"
     ipset destroy "${ipV4SetName}_new" 2>/dev/null || true
-
-    ${mkRules "ip6tables" "-D" ipV6SetName}
     ipset destroy "${ipV6SetName}"
     ipset destroy "${ipV6SetName}_new" 2>/dev/null || true
   '';
