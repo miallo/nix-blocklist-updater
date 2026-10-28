@@ -194,7 +194,12 @@ let
     commit_staged "${ipV6SetName}" "${ipV6SetName}_new"
     ${installRules "ip6tables" (ruleSpecs.${cfg.blockDirection} ipV6SetName)}
 
-    ${lib.optionalString (!cfg.debug) ''rm -f "$BLFILE"''}
+    ${
+      if cfg.debug then
+        ''mv "$BLFILE" ${lib.escapeShellArg "${bldebugDir}/ipblocklist.txt"}''
+      else
+        ''rm -f "$BLFILE"''
+    }
   '';
 
   postStop = /* bash */ ''
