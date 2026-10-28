@@ -13,16 +13,27 @@ let
     "hash:net ${
       lib.optionalString (cfg.hashSize != null) "hashsize ${toString cfg.hashSize} "
     }maxelem ${toString cfg.maxElem} family ${family}";
-  mkRules = bin: f: set: /* bash */ ''
-    ${bin} ${f} INPUT -m set --match-set ${set} src -j DROP
-    ${bin} ${f} INPUT -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
-
-    ${bin} ${f} FORWARD -m set --match-set ${set} src -j DROP
-    ${bin} ${f} FORWARD -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
-
-    ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j DROP
-    ${bin} -t raw ${f} PREROUTING -m set --match-set ${set} src -j LOG --log-prefix "FW_DROPPED: "
-  '';
+  logLimit = "-m limit --limit 10/min --limit-burst 20";
+  mkRules =
+    bin: f: set:
+    let
+      # Insert at explicit positions (LOG at 1, DROP at 2) so the LOG rule
+      # always evaluates before the DROP that follows it, independent of the
+      # order these commands run in; the old code silently relied on iptables -I
+      # prepending (see review #7). -D takes no position and matches the full
+      # rule spec, so teardown is unaffected. LOG is rate limited: without it
+      # any scan from a blocklisted source floods the kernel log.
+      pos = n: lib.optionalString (f == "-I") " ${toString n}";
+      m = "-m set --match-set ${set} src";
+    in
+    /* bash */ ''
+      ${bin} ${f} INPUT${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
+      ${bin} ${f} INPUT${pos 2} ${m} -j DROP
+      ${bin} ${f} FORWARD${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
+      ${bin} ${f} FORWARD${pos 2} ${m} -j DROP
+      ${bin} -t raw ${f} PREROUTING${pos 1} ${m} ${logLimit} -j LOG --log-prefix "FW_DROPPED: "
+      ${bin} -t raw ${f} PREROUTING${pos 2} ${m} -j DROP
+    '';
 
   sed_domain_regex = "^(0\.0\.0\.0|127\.0\.0\.1)?[[:space:]]*([a-zA-Z0-9.-]*\.[a-zA-Z][a-zA-Z0-9.-]*)$";
   script = /* bash */ ''

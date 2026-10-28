@@ -35,6 +35,13 @@ check "iptables rules installed" "[ \$(rulecount) -ge 2 ]"
 check "no staging set left" "! ipset -L blocklist-as4_new >/dev/null 2>&1"
 BEFORE_ENTRIES=$(v4entries); BEFORE_RULES=$(rulecount)
 
+# Regression pins for review #7: the LOG rule must evaluate before its DROP
+# (explicit chain positions 1/2, not -I insertion-order luck), and it must be
+# rate limited (unthrottled LOG = kernel log flood from any scanned source).
+check "LOG rule sits above DROP rule" "iptables -S INPUT | grep -m2 'match-set' | head -1 | grep -q LOG"
+check "LOG rules rate limited" "iptables -S | grep FW_DROPPED | grep -q -- '--limit'"
+check "raw PREROUTING pair also ordered" "iptables -S -t raw | grep -m2 'match-set' | head -1 | grep -q LOG"
+
 echo "== run 2: swap path =="
 bash "$SCRIPT"; rc=$?
 check "run2 exits 0" "[ $rc -eq 0 ]"
