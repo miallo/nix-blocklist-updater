@@ -33,4 +33,8 @@ let
     ];
   };
 in
-sys.config.systemd.services."blocklist".script
+{
+  # the exact shell script the systemd unit runs, and its ExecStopPost twin
+  script = sys.config.systemd.services."blocklist".script;
+  postStop = sys.config.systemd.services."blocklist".postStop;
+}

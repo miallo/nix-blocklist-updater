@@ -6,12 +6,14 @@
 # $3 = script without manual IPs (for the empty-guard test)
 # $4 = directory for generated artifacts (empty.txt, transient scripts)
 # $5 = script variant with blockDirection = "inbound" (runs 6+7)
+# $6 = generated postStop of the unit (run 8: teardown of <= main's rules)
 set -u
 SCRIPT="$1"
 SCRIPT2="${2:-}"
 SCRIPT3="${3:-}"
 WORK="${4:-/tmp}"
 SCRIPT4="${5:-}"
+STOP="${6:-}"
 COMMITTED_LISTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lists"
 LISTS="$WORK/lists.serve"
 rm -rf "$LISTS"; mkdir -p "$LISTS"; cp "$COMMITTED_LISTS"/* "$LISTS"/
@@ -122,6 +124,46 @@ if [ -n "$SCRIPT4" ]; then
   check "outbound fetch of listed address works (reply passes)" "[ $? -eq 0 ]"
   kill $SRV; wait $SRV 2>/dev/null
   check "FORWARD rules exist (textual)" "[ \$(ip6tables-save | grep 'match-set blocklist-as6' | grep -c FORWARD) = 2 ]"
+fi
+
+if [ -n "$STOP" ]; then
+  echo "== run 8: upgrade teardown (rules exactly as installed by <= main) =="
+  # main installed: old create options (no maxelem), LOG WITHOUT -m limit,
+  # raw pair. -D matches full specs, so this state is what broke upgrades:
+  # the un-matched LOG rules pinned the sets, DROP rules vanished, and the
+  # next start (gated on set existence) never reinstalled them.
+  iptables -F; iptables -t raw -F; ip6tables -F; ip6tables -t raw -F
+  ipset destroy blocklist-as4; ipset destroy blocklist-as6
+  ipset create blocklist-as4 hash:net hashsize 262144 family inet
+  ipset create blocklist-as6 hash:net hashsize 262144 family inet6
+  iptables -I INPUT -m set --match-set blocklist-as4 src -j DROP
+  iptables -I INPUT -m set --match-set blocklist-as4 src -j LOG --log-prefix "FW_DROPPED: "
+  iptables -I FORWARD -m set --match-set blocklist-as4 src -j DROP
+  iptables -I FORWARD -m set --match-set blocklist-as4 src -j LOG --log-prefix "FW_DROPPED: "
+  iptables -t raw -I PREROUTING -m set --match-set blocklist-as4 src -j DROP
+  iptables -t raw -I PREROUTING -m set --match-set blocklist-as4 src -j LOG --log-prefix "FW_DROPPED: "
+  ip6tables -I INPUT -m set --match-set blocklist-as6 src -j DROP
+  ip6tables -I INPUT -m set --match-set blocklist-as6 src -j LOG --log-prefix "FW_DROPPED: "
+  ip6tables -I FORWARD -m set --match-set blocklist-as6 src -j DROP
+  ip6tables -I FORWARD -m set --match-set blocklist-as6 src -j LOG --log-prefix "FW_DROPPED: "
+  bash "$STOP" 2>/dev/null; rc=$?
+  check "postStop exits 0 on legacy state" "[ $rc -eq 0 ]"
+  check "pre-limit filter rules deleted" "[ \$(iptables-save | grep -c 'match-set blocklist-as4') = 0 ]"
+  check "pre-limit raw rules deleted" "[ \$(iptables-save -t raw | grep -c 'match-set blocklist-as4') = 0 ]"
+  check "main-era sets destroyed" "! ipset -L blocklist-as4 >/dev/null 2>&1"
+  python3 -m http.server -d "$LISTS" 8765 >/dev/null 2>&1 & SRV=$!; sleep 1
+  bash "$SCRIPT2"; rc=$?
+  kill $SRV; wait $SRV 2>/dev/null
+  check "start after upgrade exits 0" "[ $rc -eq 0 ]"
+  check "DROP rules installed after upgrade" "iptables -S INPUT | grep 'match-set blocklist-as4' | grep -q '\-j DROP'"
+  check "no unrate-limited LOG survives upgrade" "[ \$(iptables-save | grep 'match-set' | grep FW_DROPPED | grep -vc -- '--limit') = 0 ]"
+  # and blocking is actually in force: under 'all', replies to outbound die
+  ip addr add 192.168.99.1/24 dev lo 2>/dev/null || true
+  ip addr add 10.10.9.9/24 dev lo 2>/dev/null || true
+  python3 -m http.server 8081 --bind 192.168.99.1 >/dev/null 2>&1 & SRV=$!; sleep 1
+  wget -q --bind-address=10.10.9.9 -T 3 -t 1 -O /dev/null http://192.168.99.1:8081/
+  check "blocking works again after upgrade" "[ $? -ne 0 ]"
+  kill $SRV; wait $SRV 2>/dev/null
 fi
 echo "== RESULT: $pass pass, $fail fail =="
 [ $fail -eq 0 ]
