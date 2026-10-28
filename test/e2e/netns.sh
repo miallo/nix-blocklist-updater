@@ -20,7 +20,8 @@ ev() { nix eval --impure --expr "(import $eval_nix { repo = \"$repo\"; ${1:-} })
 ev "maxElem = 4096;" > "$outdir/s1.sh"
 ev "" > "$outdir/s2.sh"
 ev "blocklistedIPs = [ ];" > "$outdir/s3.sh"
+ev "blockDirection = \"inbound\";" > "$outdir/s4.sh"
 
 # tools from the flake-locked devShell (nix flake check builds it too)
 nix develop "${repo}#default" -c unshare -Urn bash "$here/run.sh" \
-  "$outdir/s1.sh" "$outdir/s2.sh" "$outdir/s3.sh" "$outdir"
+  "$outdir/s1.sh" "$outdir/s2.sh" "$outdir/s3.sh" "$outdir" "$outdir/s4.sh"

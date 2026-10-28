@@ -80,7 +80,8 @@
             ipset
             iptables
             wget
-            bind
+            dig
+            iproute2 # `ip` used by the e2e harness to set up loopback players
             python3
             coreutils
             gnused

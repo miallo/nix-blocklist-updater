@@ -5,11 +5,13 @@
 # $2 = script variant with different create options (option-change commit test)
 # $3 = script without manual IPs (for the empty-guard test)
 # $4 = directory for generated artifacts (empty.txt, transient scripts)
+# $5 = script variant with blockDirection = "inbound" (runs 6+7)
 set -u
 SCRIPT="$1"
 SCRIPT2="${2:-}"
 SCRIPT3="${3:-}"
 WORK="${4:-/tmp}"
+SCRIPT4="${5:-}"
 COMMITTED_LISTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lists"
 LISTS="$WORK/lists.serve"
 rm -rf "$LISTS"; mkdir -p "$LISTS"; cp "$COMMITTED_LISTS"/* "$LISTS"/
@@ -79,5 +81,47 @@ if [ -n "$SCRIPT2" ]; then
   kill $SRV; wait $SRV 2>/dev/null
 fi
 
+if [ -n "$SCRIPT4" ]; then
+  echo "== run 6: control — 'all' mode kills replies, so outbound to listed hosts fails =="
+  # loopback players, distinguished only by which address a socket binds:
+  ip addr add 192.168.99.1/24 dev lo   # listed server (192.168.99.0/24 in all.txt)
+  ip addr add 10.10.9.9/24 dev lo      # never-listed client (outbound tests)
+  ip addr add 10.0.0.2/24 dev lo       # listed client (10.0.0.0/24 in all.txt)
+  ip addr add 10.11.0.1/24 dev lo      # never-listed server (NEW-drop target)
+  python3 -m http.server 8081 --bind 192.168.99.1 >/dev/null 2>&1 &
+  SRV=$!; sleep 1
+  wget -q --bind-address=10.10.9.9 -T 2 -t 1 -O /dev/null http://192.168.99.1:8081/
+  rc=$?
+  check "under 'all', fetching a listed address fails (SYN-ACK dropped)" "[ $rc -ne 0 ]"
+  kill $SRV; wait $SRV 2>/dev/null
+
+  echo "== run 7: inbound mode keeps outbound, drops new inbound =="
+  # full teardown (rules first: iptables refs pin the sets), fresh start under
+  # the new setting
+  iptables -F; iptables -t raw -F; ip6tables -F; ip6tables -t raw -F
+  ipset destroy blocklist-as4
+  ipset destroy blocklist-as6
+  python3 -m http.server 8080 --bind 10.11.0.1 >/dev/null 2>&1 &
+  SRV=$!; sleep 1
+  python3 -m http.server -d "$LISTS" 8765 >/dev/null 2>&1 &
+  SRV2=$!; sleep 1
+  wget -q --bind-address=10.0.0.2 -T 2 -t 1 -O /dev/null http://10.11.0.1:8080/
+  check "control: listed source reaches server before rules exist" "[ $? -eq 0 ]"
+  bash "$SCRIPT4"; rc=$?
+  kill $SRV2 2>/dev/null; wait $SRV2 2>/dev/null
+  check "run7 exits 0" "[ $rc -eq 0 ]"
+  check "entries intact after inbound install" "[ \$(v4entries) = $BEFORE_ENTRIES ]"
+  check "no raw rules in inbound mode" "[ \$(iptables-save -t raw | grep -c 'match-set') = 0 ]"
+  check "exactly the 4 filter rules, all ctstate NEW" "[ \$(iptables-save | grep -c 'match-set blocklist-as4') = 4 ] && [ \$(iptables-save | grep 'match-set blocklist-as4' | grep -vc -- '--ctstate NEW') = 0 ]"
+  check "LOG above DROP in inbound mode" "iptables -S INPUT | grep -m2 'match-set' | head -1 | grep -q LOG"
+  wget -q --bind-address=10.0.0.2 -T 2 -t 1 -O /dev/null http://10.11.0.1:8080/
+  check "new inbound conn from listed source dropped" "[ $? -ne 0 ]"
+  python3 -m http.server 8081 --bind 192.168.99.1 >/dev/null 2>&1 &
+  SRV=$!; sleep 1
+  wget -q --bind-address=10.10.9.9 -T 3 -t 1 -O /dev/null http://192.168.99.1:8081/
+  check "outbound fetch of listed address works (reply passes)" "[ $? -eq 0 ]"
+  kill $SRV; wait $SRV 2>/dev/null
+  check "FORWARD rules exist (textual)" "[ \$(ip6tables-save | grep 'match-set blocklist-as6' | grep -c FORWARD) = 2 ]"
+fi
 echo "== RESULT: $pass pass, $fail fail =="
 [ $fail -eq 0 ]

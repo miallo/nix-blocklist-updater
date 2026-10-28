@@ -8,6 +8,7 @@
   repo,
   maxElem ? null,
   blocklistedIPs ? [ "9.9.9.9" ],
+  blockDirection ? "all",
 }:
 let
   flake = builtins.getFlake "git+file://${repo}";
@@ -24,6 +25,7 @@ let
           inherit blocklistedIPs;
           blocklistedCountries = [ ];
           blocklistedASNs = [ ];
+          inherit blockDirection;
         }
         // (if maxElem == null then { } else { inherit maxElem; });
       }
